@@ -6,6 +6,7 @@ use Validator;
 use App\Models\Users;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
 
 class AuthController extends Controller
@@ -23,8 +24,8 @@ class AuthController extends Controller
     public function login (Request $request)
     {
         $validator = Validator::make($request->all(),[
-            'username'=>'required|min:4',
-            'password'=> 'required|min:6'
+            'username'=>'required|string',
+            'password'=> 'required|string'
         ],
         [
             'required' => ':attribute harus diisi',
@@ -32,52 +33,12 @@ class AuthController extends Controller
             'unique'=> ':attribute sudah terdaftar'
         ]);
 
-        if ($validator->fails())
-        {
-            $resp = [
-                'metadata'=>[
-                    'message'=>$validator->errors()->first(),
-                    'code'=>422
-                ]
-                ];
-                return response()->json($resp,422);
-                die();
-        }
+        $credentials = $request->only(['username','password']);
 
-        $user = Users::where('username',$request->username)->first();
-        if($user)
-        {
-            if(Crypt::decrypt($user->password)==$request->password)
-            {
-                $token = \Auth::login($user);
-                $resp = [
-                    'response'=>[
-                        'token'=>$token
-                    ],
-                    'metadata'=>[
-                        'message'=>'OK',
-                        'code'=>200
-                    ]
-                    ];
-                    return response()->json($resp);
-            } else {
-                $resp = [
-                    'metadata'=>[
-                        'message'=> 'Username atau Password tidak sesuai.',
-                        'code'=>401
-                    ]
-                    ];
-                    return response()->json($resp,401);
-            }
-        } else {
-            $resp = [
-                'metadata'=> [
-                    'message'=> 'Username atau Password tidak sesuai.',
-                    'code'=>401
-                ]
-                ];
-                return response()->json($resp,401);
+        if(!$token = Auth::attempt($credentials)){
+            return response()->json(['message'=> 'Unauthorized'],401);
         }
+        return $this->respondWithToken($token);
     }
 
     public function register (Request $request)
@@ -99,17 +60,10 @@ class AuthController extends Controller
         {
             $data = $request->all();
             // $pass_encrypt = Crypt::encrypt($data['password']);
-            $data['password'] = Crypt::encrypt($data['password']);
+            $data['password'] = app('hash')->make($data['password']);
 
             // return response()->json($data);
             Users::create($data);
-            // Users::create([
-            //     'name'=> $request->name,
-            //     'address'=> $request->address,
-            //     'phone'=> $request->phone,
-            //     'username'=> $request->username,
-            //     'password'=> $pass_encrypt
-            // ]);
 
             return response()->json([
                 'message' => "User berhasil terdaftar",
@@ -125,9 +79,5 @@ class AuthController extends Controller
             ];
             return response()->json($resp,422);
             die();
-
-
-
-
     }
 }
